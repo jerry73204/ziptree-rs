@@ -33,6 +33,9 @@ fn simple_test() -> Result<(), Box<dyn Debug>> {
         assert!(tree.len() == pairs.len());
     }
 
+    for ((key, val), (expect_key, expect_val)) in tree.into_iter().zip(pairs.into_iter()) {
+        assert!(key == expect_key && val == expect_val);
+    }
     // tree.dump();
 
     Ok(())
