@@ -1,40 +1,73 @@
+//! Tarjan's zip tree implementation in Rust.
+//!
+//! Zip tree is a treap with different insertion and deletion algorithms.
+//! It organizes node ranks like skip list, but takes less space than skip list.
+//! Insertion and deletion are done by _zip_ and _unzip_ operations instead of
+//! a series of tree rotations. You can see [Tarjans's paper](https://arxiv.org/abs/1806.06726)
+//! for more details.
+
 extern crate rand;
 
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::borrow::Borrow;
-use std::mem::{replace, swap};
+use std::mem::replace;
 use std::cmp::Ordering;
 use std::collections::{LinkedList, HashMap};
 use std::fmt::Debug;
 use std::ptr::null_mut;
 use rand::prelude::*;
 
+/// The struct is created by [ZipTree::into_iter()](struct.ZipTree.html#impl-IntoIterator).
+#[derive(Clone)]
+pub struct IntoIter<K, V> {
+    iter: std::collections::linked_list::IntoIter<(K, V)>,
+}
+
+/// The struct is created by [ZipTree::iter()](struct.ZipTree.html#method.iter).
+#[derive(Clone)]
 pub struct Iter<'a, K: 'a, V: 'a> {
+    tree: &'a ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a V)>,
 }
 
+/// The struct is created by [ZipTree::iter_mut()](struct.ZipTree.html#method.iter_mut).
 pub struct IterMut<'a, K: 'a, V: 'a> {
+    tree: &'a mut ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a mut V)>,
 }
 
+/// The struct is created by [ZipTree::keys()](struct.ZipTree.html#method.keys).
+#[derive(Clone)]
 pub struct Keys<'a, K: 'a, V: 'a> {
+    tree: &'a ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a V)>,
 }
 
+/// The struct is created by [ZipTree::values()](struct.ZipTree.html#method.values).
+#[derive(Clone)]
 pub struct Values<'a, K: 'a, V: 'a> {
+    tree: &'a ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a V)>,
 }
 
+/// The struct is created by [ZipTree::values_mut()](struct.ZipTree.html#method.values_mut).
 pub struct ValuesMut<'a, K: 'a, V: 'a> {
+    tree: &'a mut ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a V)>,
 }
 
+
+/// Tarjan's zip tree implementation.
+///
+/// The ZipTree API mimics the standard library's BTreeMap. It provides look-ups, insertions,
+/// deletions and iterator interface. Cloning this tree will deep copy overall tree structure,
+/// and thus takes O(n) time.
 pub struct ZipTree<K, V> {
     root: *mut Node<K, V>,
     n_nodes: usize,
@@ -48,6 +81,7 @@ struct Node<K, V> {
     right: *mut Node<K, V>,
 }
 
+#[derive(Clone)]
 enum DfsAction {
     Enter, Leave
 }
@@ -172,12 +206,26 @@ impl<K, V> ZipTree<K, V> where
         let (parent, child, key_cmp, less_nodes, greater_nodes) = unsafe {
             let mut prev = null_mut();
             let mut curr = self.root;
-            let mut key_cmp = None;
+            let mut prev_cmp = None;
 
             // Locate insertion point
-            while !curr.is_null() && (rank < (*curr).rank) {
-                let curr_cmp = key.cmp((*curr).key.borrow());
-                match curr_cmp {
+            let (parent, child, key_cmp) = loop {
+                if curr.is_null() {
+                    break (prev, curr, prev_cmp);
+                }
+
+                let key_cmp = key.cmp((*curr).key.borrow());
+                let rank_cmp = rank.cmp(&(*curr).rank);
+
+                match (rank_cmp, key_cmp) {
+                    (Ordering::Less, _) =>
+                        break (prev, curr, prev_cmp),
+                    (Ordering::Equal, Ordering::Less) =>
+                        break (prev, curr, prev_cmp),
+                    _ => {}
+                }
+
+                match key_cmp {
                     Ordering::Equal => {
                         let prev_value = replace(&mut (*curr).value, value);
                         return Some(prev_value);
@@ -191,11 +239,9 @@ impl<K, V> ZipTree<K, V> where
                         curr = (*curr).right;
                     }
                 }
-                key_cmp = Some(curr_cmp);
-            }
+                prev_cmp = Some(key_cmp);
+            };
 
-            let parent = prev;
-            let child = curr;
             let mut less_nodes = Vec::new();
             let mut greater_nodes = Vec::new();
 
@@ -430,51 +476,56 @@ impl<K, V> ZipTree<K, V> where
         }
     }
 
-    pub fn iter<'a>(&self) -> Iter<'a, K, V> {
+    pub fn iter<'a>(&'a self) -> Iter<'a, K, V> {
         let mut path = LinkedList::new();
         path.push_back((self.root, DfsAction::Enter));
 
         Iter {
+            tree: self,
             path,
             dummy: PhantomData,
         }
     }
 
-    pub fn iter_mut<'a>(&self) -> IterMut<'a, K, V> {
+    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a, K, V> {
         let mut path = LinkedList::new();
         path.push_back((self.root, DfsAction::Enter));
 
         IterMut {
+            tree: self,
             path,
             dummy: PhantomData,
         }
     }
 
-    pub fn keys<'a>(&self) -> Keys<'a, K, V> {
+    pub fn keys<'a>(&'a self) -> Keys<'a, K, V> {
         let mut path = LinkedList::new();
         path.push_back((self.root, DfsAction::Enter));
 
         Keys {
+            tree: self,
             path,
             dummy: PhantomData,
         }
     }
 
-    pub fn values<'a>(&self) -> Values<'a, K, V> {
+    pub fn values<'a>(&'a self) -> Values<'a, K, V> {
         let mut path = LinkedList::new();
         path.push_back((self.root, DfsAction::Enter));
 
         Values {
+            tree: self,
             path,
             dummy: PhantomData,
         }
     }
 
-    pub fn values_mut<'a>(&self) -> ValuesMut<'a, K, V> {
+    pub fn values_mut<'a>(&'a mut self) -> ValuesMut<'a, K, V> {
         let mut path = LinkedList::new();
         path.push_back((self.root, DfsAction::Enter));
 
         ValuesMut {
+            tree: self,
             path,
             dummy: PhantomData,
         }
@@ -484,6 +535,7 @@ impl<K, V> ZipTree<K, V> where
         K: Debug,
         V: Debug,
     {
+        // This method is intended for debug purpose
         let mut stack = LinkedList::new();
 
         if self.root.is_null() {
@@ -635,6 +687,47 @@ impl<K: Clone, V: Clone> Clone for ZipTree<K, V> {
             root: new_root,
             n_nodes: self.n_nodes,
         }
+    }
+}
+
+impl<K, V> Drop for ZipTree<K, V> {
+    fn drop(&mut self) {
+        let mut path = LinkedList::new();
+        path.push_back((self.root, DfsAction::Enter));
+
+        loop {
+            let (node, action) = match path.pop_back() {
+                None => break,
+                Some(item) => item,
+            };
+
+            if node.is_null() {
+                continue;
+            }
+
+            let (left, right) = unsafe {
+                let left = (*node).left;
+                let right = (*node).right;
+                (left, right)
+            };
+
+            match action {
+                DfsAction::Enter => {
+                    path.push_back((right, DfsAction::Enter));
+                    path.push_back((node, DfsAction::Leave));
+                    path.push_back((left, DfsAction::Enter));
+                }
+                DfsAction::Leave => {
+                    let node_boxed = unsafe {
+                        Box::from_raw(node)
+                    };
+                    drop(node_boxed);
+                }
+            }
+        }
+
+        self.root = null_mut();
+        self.n_nodes = 0;
     }
 }
 
@@ -829,5 +922,63 @@ impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
                 }
             }
         }
+    }
+}
+
+
+impl<K, V> IntoIterator for ZipTree<K, V> {
+    type Item = (K, V);
+    type IntoIter = IntoIter<K, V>;
+
+    fn into_iter(mut self) -> Self::IntoIter {
+        let mut entries = LinkedList::new();
+        let mut path = LinkedList::new();
+        path.push_back((self.root, DfsAction::Enter));
+
+        loop {
+            let (node, action) = match path.pop_back() {
+                None => break,
+                Some(item) => item,
+            };
+
+            if node.is_null() {
+                continue;
+            }
+
+            let (left, right) = unsafe {
+                let left = (*node).left;
+                let right = (*node).right;
+                (left, right)
+            };
+
+            match action {
+                DfsAction::Enter => {
+                    path.push_back((right, DfsAction::Enter));
+                    path.push_back((node, DfsAction::Leave));
+                    path.push_back((left, DfsAction::Enter));
+                }
+                DfsAction::Leave => {
+                    let node_boxed = unsafe {
+                        Box::from_raw(node)
+                    };
+                    entries.push_back((node_boxed.key, node_boxed.value));
+                }
+            }
+        }
+
+        self.root = null_mut();
+        self.n_nodes = 0;
+        drop(self);
+
+        IntoIter {
+            iter: entries.into_iter(),
+        }
+    }
+}
+
+impl<K, V> Iterator for IntoIter<K, V> {
+    type Item = (K, V);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
     }
 }
