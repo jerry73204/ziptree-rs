@@ -1,7 +1,7 @@
 [package]
 name = "ziptree"
-version = "0.1.1"
-authors = ["jerry73204 <jerry73204@gmail.com>"]
+version = "0.2.0"
+authors = ["jerry73204 <jerry73204@gmail.com>", "howsiyu <howseeu@gmail.com>"]
 edition = "2018"
 description = "Tarjan's zip tree implemented in Rust"
 categories = ["data-structures", "algorithms"]
@@ -12,4 +12,4 @@ license = "MIT"
 license-file = "LICENSE"
 
 [dependencies]
-rand = "^0.6"
+rand = { version = "0.8.5", features = ["small_rng"] }
