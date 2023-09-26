@@ -39,13 +39,13 @@ struct Node<K, V> {
 }
 
 impl<K, V> Node<K, V> {
-    fn new(key: K, value: V, rank: Rank) -> Box<Self> {
+    fn new(key: K, value: V, rank: Rank, left: Tree<K, V>, right: Tree<K, V>) -> Box<Self> {
         Box::new(Node {
             key,
             value,
             rank,
-            left: None,
-            right: None,
+            left,
+            right,
         })
     }
 }
@@ -149,8 +149,8 @@ where
         } {
             match key.cmp(&node.key) {
                 Ordering::Equal => {
-                    let _ = std::mem::replace(left_tree, node.left);
-                    let _ = std::mem::replace(right_tree, node.right);
+                    *left_tree = node.left;
+                    *right_tree = node.right;
                     return Some(node.value);
                 }
                 Ordering::Less => {
@@ -174,19 +174,17 @@ where
         while let Some(node) = cur {
             match key.cmp(&node.key) {
                 Ordering::Equal => {
-                    let old_val = std::mem::replace(&mut node.value, value);
-                    return Some(old_val);
+                    return Some(std::mem::replace(&mut node.value, value));
                 }
                 Ordering::Less => {
                     if rank < node.rank {
                         cur = &mut node.left;
                     } else {
-                        let right_tree = {
-                            let x = std::mem::replace(node, Node::new(key, value, rank));
-                            &mut node.right.insert(x).left
-                        };
-                        let old_value =
-                            Self::unzip(Side::Right, &node.key, &mut node.left, right_tree);
+                        let mut left = None;
+                        let old_value = Self::unzip(Side::Right, &key, &mut left, &mut node.left);
+                        let right_node =
+                            std::mem::replace(node, Node::new(key, value, rank, left, None));
+                        let _ = node.right.insert(right_node);
                         if old_value.is_none() {
                             self.length += 1;
                         }
@@ -197,12 +195,11 @@ where
                     if rank <= node.rank {
                         cur = &mut node.right;
                     } else {
-                        let left_tree = {
-                            let x = std::mem::replace(node, Node::new(key, value, rank));
-                            &mut node.left.insert(x).right
-                        };
-                        let old_value =
-                            Self::unzip(Side::Left, &node.key, left_tree, &mut node.right);
+                        let mut right = None;
+                        let old_value = Self::unzip(Side::Left, &key, &mut node.right, &mut right);
+                        let left_node =
+                            std::mem::replace(node, Node::new(key, value, rank, None, right));
+                        let _ = node.left.insert(left_node);
                         if old_value.is_none() {
                             self.length += 1;
                         }
@@ -212,7 +209,7 @@ where
             }
         }
 
-        let _ = cur.insert(Node::new(key, value, rank));
+        let _ = cur.insert(Node::new(key, value, rank, None, None));
         self.length += 1;
 
         None
@@ -249,7 +246,7 @@ where
                 Ordering::Less => cur = &mut cur.insert(node).left,
                 Ordering::Greater => cur = &mut cur.insert(node).right,
                 Ordering::Equal => {
-                    let _ = std::mem::replace(cur, node.right);
+                    *cur = node.right;
 
                     if let Some(left_node) = node.left {
                         Self::zip(Side::Right, cur, left_node);
@@ -271,6 +268,7 @@ impl<K, V> Default for ZipTree<K, V> {
     }
 }
 
+#[derive(Clone)]
 pub struct Iter<'a, K: 'a, V: 'a> {
     stack: Vec<&'a Node<K, V>>,
     length: usize,
@@ -279,10 +277,10 @@ pub struct Iter<'a, K: 'a, V: 'a> {
 impl<K, V> ZipTree<K, V> {
     pub fn iter(&self) -> Iter<'_, K, V> {
         let mut stack = Vec::new();
-        let mut tree = &self.root;
-        while let Some(x) = tree {
+        let mut cur = &self.root;
+        while let Some(x) = cur {
             stack.push(&**x);
-            tree = &x.left;
+            cur = &x.left;
         }
         Iter {
             stack,
@@ -296,10 +294,10 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.stack.pop().map(|node| {
-            let mut tree = &node.right;
-            while let Some(x) = tree {
+            let mut cur = &node.right;
+            while let Some(x) = cur {
                 self.stack.push(x);
-                tree = &x.left;
+                cur = &x.left;
             }
             (&node.key, &node.value)
         })
@@ -318,10 +316,10 @@ pub struct IterMut<'a, K: 'a, V: 'a> {
 impl<K, V> ZipTree<K, V> {
     pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         let mut stack = Vec::new();
-        let mut tree = &mut self.root;
-        while let Some(x) = tree {
+        let mut cur = &mut self.root;
+        while let Some(x) = cur {
             stack.push((&x.key, &mut x.value, &mut x.right));
-            tree = &mut x.left;
+            cur = &mut x.left;
         }
         IterMut {
             stack,
@@ -335,10 +333,10 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.stack.pop().map(|(key, value, right)| {
-            let mut tree = right;
-            while let Some(x) = tree {
+            let mut cur = right;
+            while let Some(x) = cur {
                 self.stack.push((&x.key, &mut x.value, &mut x.right));
-                tree = &mut x.left;
+                cur = &mut x.left;
             }
             (key, value)
         })
@@ -349,6 +347,7 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
     }
 }
 
+#[derive(Clone)]
 pub struct IntoIter<K, V> {
     stack: Vec<(K, V, Tree<K, V>)>,
     length: usize,
@@ -360,10 +359,10 @@ impl<K, V> IntoIterator for ZipTree<K, V> {
 
     fn into_iter(self) -> Self::IntoIter {
         let mut stack = Vec::new();
-        let mut tree = self.root;
+        let mut cur = self.root;
 
-        while let Some(node) = tree {
-            tree = node.left;
+        while let Some(node) = cur {
+            cur = node.left;
             stack.push((node.key, node.value, node.right));
         }
         IntoIter {
@@ -378,10 +377,10 @@ impl<K, V> Iterator for IntoIter<K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.stack.pop().map(|(key, value, right)| {
-            let mut tree = right;
-            while let Some(x) = tree {
+            let mut cur = right;
+            while let Some(x) = cur {
                 self.stack.push((x.key, x.value, x.right));
-                tree = x.left;
+                cur = x.left;
             }
             (key, value)
         })

@@ -1,7 +1,6 @@
+use rand::Rng;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-
-use rand::Rng;
 
 #[test]
 fn simple_test() -> Result<(), Box<dyn Debug>> {
