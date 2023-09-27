@@ -12,8 +12,10 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use std::borrow::Borrow;
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::mem::replace;
+use std::ops::{Bound, RangeBounds};
 
 /// The struct is created by [ZipTree::into_iter()](struct.ZipTree.html#impl-IntoIterator).
 #[derive(Clone)]
@@ -33,6 +35,22 @@ pub struct Iter<'a, K: 'a, V: 'a> {
 pub struct IterMut<'a, K: 'a, V: 'a> {
     stack: Vec<(&'a K, &'a mut V, &'a mut Tree<K, V>)>,
     length: usize,
+}
+
+/// The struct is created by [ZipTree::range()](struct.ZipTree.html#method.range).
+pub struct Range<'a, K: 'a, V: 'a>(VecDeque<Marker<'a, K, V>>);
+
+enum Marker<'a, K: 'a, V: 'a> {
+    Item(&'a Node<K, V>),
+    Tree(&'a Node<K, V>),
+}
+
+/// The struct is created by [ZipTree::range_mut()](struct.ZipTree.html#method.range_mut).
+pub struct RangeMut<'a, K: 'a, V: 'a>(VecDeque<MarkerMut<'a, K, V>>);
+
+enum MarkerMut<'a, K: 'a, V: 'a> {
+    Item((&'a K, &'a mut V)),
+    Tree(&'a mut Node<K, V>),
 }
 
 /// Tarjan's zip tree implementation.
@@ -396,5 +414,206 @@ impl<K, V> Iterator for IntoIter<K, V> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.length, Some(self.length))
+    }
+}
+
+fn satisfies_start<T: Ord>(start_bound: Bound<T>, item: T) -> bool {
+    match start_bound {
+        Bound::Included(start) => start <= item,
+        Bound::Excluded(start) => start < item,
+        Bound::Unbounded => true,
+    }
+}
+
+fn satisfies_end<T: Ord>(end_bound: Bound<T>, item: T) -> bool {
+    match end_bound {
+        Bound::Included(end) => item <= end,
+        Bound::Excluded(end) => item < end,
+        Bound::Unbounded => true,
+    }
+}
+
+impl<K, V> ZipTree<K, V>
+where
+    K: Ord,
+{
+    pub fn range<Q, R>(&self, range: R) -> Range<'_, K, V>
+    where
+        K: Borrow<Q>,
+        Q: Ord + ?Sized,
+        R: RangeBounds<Q>,
+    {
+        let mut deque = VecDeque::new();
+        let mut cur = &self.root;
+
+        while let Some(root_node) = cur {
+            if !satisfies_start(range.start_bound(), root_node.key.borrow()) {
+                cur = &root_node.right;
+            } else if !satisfies_end(range.end_bound(), root_node.key.borrow()) {
+                cur = &root_node.left;
+            } else {
+                let mut left_tree = &root_node.left;
+                while let Some(node) = left_tree {
+                    if satisfies_start(range.start_bound(), node.key.borrow()) {
+                        if let Some(ref right_node) = node.right {
+                            deque.push_front(Marker::Tree(right_node));
+                        }
+                        deque.push_front(Marker::Item(node));
+                        left_tree = &node.left;
+                    } else {
+                        left_tree = &node.right;
+                    }
+                }
+
+                deque.push_back(Marker::Item(root_node));
+
+                let mut right_tree = &root_node.right;
+                while let Some(node) = right_tree {
+                    if satisfies_end(range.end_bound(), node.key.borrow()) {
+                        if let Some(ref left_node) = node.left {
+                            deque.push_back(Marker::Tree(left_node));
+                        }
+                        deque.push_back(Marker::Item(node));
+                        right_tree = &node.right;
+                    } else {
+                        right_tree = &node.left;
+                    }
+                }
+
+                break;
+            }
+        }
+        Range(deque)
+    }
+
+    pub fn range_mut<Q, R>(&mut self, range: R) -> RangeMut<'_, K, V>
+    where
+        Q: Ord,
+        K: Borrow<Q>,
+        R: RangeBounds<Q>,
+    {
+        let mut deque = VecDeque::new();
+        let mut cur = &mut self.root;
+
+        while let Some(root_node) = cur {
+            if !satisfies_start(range.start_bound(), root_node.key.borrow()) {
+                cur = &mut root_node.right;
+            } else if !satisfies_end(range.end_bound(), root_node.key.borrow()) {
+                cur = &mut root_node.left;
+            } else {
+                let mut left_tree = &mut root_node.left;
+                while let Some(node) = left_tree {
+                    if satisfies_start(range.start_bound(), node.key.borrow()) {
+                        if let Some(ref mut right_node) = node.right {
+                            deque.push_front(MarkerMut::Tree(right_node));
+                        }
+                        deque.push_front(MarkerMut::Item((&node.key, &mut node.value)));
+                        left_tree = &mut node.left;
+                    } else {
+                        left_tree = &mut node.right;
+                    }
+                }
+
+                deque.push_back(MarkerMut::Item((&root_node.key, &mut root_node.value)));
+
+                let mut right_tree = &mut root_node.right;
+                while let Some(node) = right_tree {
+                    if satisfies_end(range.end_bound(), node.key.borrow()) {
+                        if let Some(ref mut left_node) = node.left {
+                            deque.push_back(MarkerMut::Tree(left_node));
+                        }
+                        deque.push_back(MarkerMut::Item((&node.key, &mut node.value)));
+                        right_tree = &mut node.right;
+                    } else {
+                        right_tree = &mut node.left;
+                    }
+                }
+
+                break;
+            }
+        }
+        RangeMut(deque)
+    }
+}
+
+impl<'a, K, V> Iterator for Range<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.pop_front().map(|m| match m {
+            Marker::Item(node) => (&node.key, &node.value),
+            Marker::Tree(mut node) => loop {
+                if let Some(ref right_node) = node.right {
+                    self.0.push_front(Marker::Tree(right_node));
+                }
+                if let Some(ref left_node) = node.left {
+                    self.0.push_front(Marker::Item(node));
+                    node = left_node;
+                } else {
+                    return (&node.key, &node.value);
+                }
+            },
+        })
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for Range<'a, K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0.pop_back().map(|m| match m {
+            Marker::Item(node) => (&node.key, &node.value),
+            Marker::Tree(mut node) => loop {
+                if let Some(ref left_node) = node.left {
+                    self.0.push_back(Marker::Tree(left_node));
+                }
+                if let Some(ref right_node) = node.right {
+                    self.0.push_back(Marker::Item(node));
+                    node = right_node;
+                } else {
+                    return (&node.key, &node.value);
+                }
+            },
+        })
+    }
+}
+
+impl<'a, K, V> Iterator for RangeMut<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.pop_front().map(|m| match m {
+            MarkerMut::Item(key_value) => key_value,
+            MarkerMut::Tree(mut node) => loop {
+                if let Some(ref mut right_node) = node.right {
+                    self.0.push_front(MarkerMut::Tree(right_node));
+                }
+                if let Some(ref mut left_node) = node.left {
+                    self.0
+                        .push_front(MarkerMut::Item((&node.key, &mut node.value)));
+                    node = left_node;
+                } else {
+                    return (&node.key, &mut node.value);
+                }
+            },
+        })
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for RangeMut<'a, K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0.pop_back().map(|m| match m {
+            MarkerMut::Item(key_value) => key_value,
+            MarkerMut::Tree(mut node) => loop {
+                if let Some(ref mut left_node) = node.left {
+                    self.0.push_back(MarkerMut::Tree(left_node));
+                }
+                if let Some(ref mut right_node) = node.right {
+                    self.0
+                        .push_back(MarkerMut::Item((&node.key, &mut node.value)));
+                    node = right_node;
+                } else {
+                    return (&node.key, &mut node.value);
+                }
+            },
+        })
     }
 }
