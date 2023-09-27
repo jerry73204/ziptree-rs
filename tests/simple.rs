@@ -32,6 +32,20 @@ fn simple_test() -> Result<(), Box<dyn Debug>> {
         assert!(tree.len() == pairs.len());
     }
 
+
+    for _ in 0..1000 {
+        let mut key1 = rng.gen::<u16>();
+        let mut key2 = rng.gen::<u16>();
+        // We have to do this or BTreeMap will panic
+        if key1 > key2 {
+            std::mem::swap(&mut key1, &mut key2);
+        }
+
+        for ((key, val), (expect_key, expect_val)) in tree.range(key1..key2).zip(pairs.range(key1..key2)) {
+            assert!(key == expect_key && val == expect_val);
+        }
+    }
+
     // println!("{:?}", tree);
     for ((key, val), (expect_key, expect_val)) in tree.into_iter().zip(pairs.into_iter()) {
         assert!(key == expect_key && val == expect_val);
