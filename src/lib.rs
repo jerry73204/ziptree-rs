@@ -198,7 +198,9 @@ impl<K, V> ZipTree<K, V> where
 
         let rank = {
             let mut rank = 0;
-            while rng.gen_range(0, 2) == 1 { rank += 1 }
+            while rng.gen_range(0..2) == 1 {
+                rank += 1
+            }
             rank
         };
 

@@ -11,4 +11,4 @@ homepage = "https://github.com/jerry73204/ziptree-rs"
 license = "MIT"
 
 [dependencies]
-rand = "^0.6"
+rand = "0.8.5"
