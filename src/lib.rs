@@ -8,15 +8,15 @@
 
 extern crate rand;
 
-use std::marker::PhantomData;
-use std::ops::{Index, IndexMut};
-use std::borrow::Borrow;
-use std::mem::replace;
-use std::cmp::Ordering;
-use std::collections::{LinkedList, HashMap};
-use std::fmt::Debug;
-use std::ptr::null_mut;
 use rand::prelude::*;
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::collections::{HashMap, LinkedList};
+use std::fmt::Debug;
+use std::marker::PhantomData;
+use std::mem::replace;
+use std::ops::{Index, IndexMut};
+use std::ptr::null_mut;
 
 /// The struct is created by [ZipTree::into_iter()](struct.ZipTree.html#impl-IntoIterator).
 #[derive(Clone)]
@@ -27,14 +27,14 @@ pub struct IntoIter<K, V> {
 /// The struct is created by [ZipTree::iter()](struct.ZipTree.html#method.iter).
 #[derive(Clone)]
 pub struct Iter<'a, K: 'a, V: 'a> {
-    tree: &'a ZipTree<K, V>,
+    _tree: &'a ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a V)>,
 }
 
 /// The struct is created by [ZipTree::iter_mut()](struct.ZipTree.html#method.iter_mut).
 pub struct IterMut<'a, K: 'a, V: 'a> {
-    tree: &'a mut ZipTree<K, V>,
+    _tree: &'a mut ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a mut V)>,
 }
@@ -42,7 +42,7 @@ pub struct IterMut<'a, K: 'a, V: 'a> {
 /// The struct is created by [ZipTree::keys()](struct.ZipTree.html#method.keys).
 #[derive(Clone)]
 pub struct Keys<'a, K: 'a, V: 'a> {
-    tree: &'a ZipTree<K, V>,
+    _tree: &'a ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a V)>,
 }
@@ -50,18 +50,17 @@ pub struct Keys<'a, K: 'a, V: 'a> {
 /// The struct is created by [ZipTree::values()](struct.ZipTree.html#method.values).
 #[derive(Clone)]
 pub struct Values<'a, K: 'a, V: 'a> {
-    tree: &'a ZipTree<K, V>,
+    _tree: &'a ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a V)>,
 }
 
 /// The struct is created by [ZipTree::values_mut()](struct.ZipTree.html#method.values_mut).
 pub struct ValuesMut<'a, K: 'a, V: 'a> {
-    tree: &'a mut ZipTree<K, V>,
+    _tree: &'a mut ZipTree<K, V>,
     path: LinkedList<(*mut Node<K, V>, DfsAction)>,
     dummy: PhantomData<(&'a K, &'a V)>,
 }
-
 
 /// Tarjan's zip tree implementation.
 ///
@@ -83,10 +82,11 @@ struct Node<K, V> {
 
 #[derive(Clone)]
 enum DfsAction {
-    Enter, Leave
+    Enter,
+    Leave,
 }
 
-impl<K, V> Node<K, V> where {
+impl<K, V> Node<K, V> {
     fn new(key: K, value: V, rank: usize) -> Node<K, V> {
         Node {
             key,
@@ -98,7 +98,8 @@ impl<K, V> Node<K, V> where {
     }
 }
 
-impl<K, V> ZipTree<K, V> where
+impl<K, V> ZipTree<K, V>
+where
     K: Ord,
 {
     pub fn new() -> ZipTree<K, V> {
@@ -112,9 +113,10 @@ impl<K, V> ZipTree<K, V> where
         self.n_nodes
     }
 
-    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V> where
+    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
+    where
         K: Borrow<Q>,
-        Q: Ord
+        Q: Ord,
     {
         let mut node = self.root;
 
@@ -124,31 +126,27 @@ impl<K, V> ZipTree<K, V> where
                     Ordering::Equal => {
                         return Some(&(*node).value);
                     }
-                    Ordering::Less =>
-                        node = (*node).left,
-                    Ordering::Greater =>
-                        node = (*node).right,
+                    Ordering::Less => node = (*node).left,
+                    Ordering::Greater => node = (*node).right,
                 }
             }
         }
         None
     }
 
-    pub fn get_mut<'a, Q: ?Sized>(&'a mut self, key: &Q) -> Option<&'a mut V> where
+    pub fn get_mut<'a, Q: ?Sized>(&'a mut self, key: &Q) -> Option<&'a mut V>
+    where
         K: Borrow<Q>,
-        Q: Ord
+        Q: Ord,
     {
         let mut node = self.root;
 
         unsafe {
             while !node.is_null() {
                 match key.cmp((*node).key.borrow()) {
-                    Ordering::Equal =>
-                        return Some(&mut (*node).value),
-                    Ordering::Less =>
-                        node = (*node).left,
-                    Ordering::Greater =>
-                        node = (*node).right,
+                    Ordering::Equal => return Some(&mut (*node).value),
+                    Ordering::Less => node = (*node).left,
+                    Ordering::Greater => node = (*node).right,
                 }
             }
         }
@@ -156,7 +154,8 @@ impl<K, V> ZipTree<K, V> where
         None
     }
 
-    pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool where
+    pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
+    where
         K: Borrow<Q>,
         Q: Ord,
     {
@@ -172,8 +171,7 @@ impl<K, V> ZipTree<K, V> where
 
         if self.root.is_null() {
             return;
-        }
-        else {
+        } else {
             stack.push_back(self.root);
         }
 
@@ -198,10 +196,11 @@ impl<K, V> ZipTree<K, V> where
 
         let rank = {
             let mut rank = 0;
-            while rng.gen_range(0, 2) == 1 { rank += 1 }
+            while rng.gen_range(0..2) == 1 {
+                rank += 1
+            }
             rank
         };
-
 
         let (parent, child, key_cmp, less_nodes, greater_nodes) = unsafe {
             let mut prev = null_mut();
@@ -218,10 +217,8 @@ impl<K, V> ZipTree<K, V> where
                 let rank_cmp = rank.cmp(&(*curr).rank);
 
                 match (rank_cmp, key_cmp) {
-                    (Ordering::Less, _) =>
-                        break (prev, curr, prev_cmp),
-                    (Ordering::Equal, Ordering::Less) =>
-                        break (prev, curr, prev_cmp),
+                    (Ordering::Less, _) => break (prev, curr, prev_cmp),
+                    (Ordering::Equal, Ordering::Less) => break (prev, curr, prev_cmp),
                     _ => {}
                 }
 
@@ -273,25 +270,20 @@ impl<K, V> ZipTree<K, V> where
         if !parent.is_null() {
             unsafe {
                 match key_cmp {
-                    Some(Ordering::Less) =>
-                        (*parent).left = new_node,
-                    Some(Ordering::Greater) =>
-                        (*parent).right = new_node,
-                    None => {},
+                    Some(Ordering::Less) => (*parent).left = new_node,
+                    Some(Ordering::Greater) => (*parent).right = new_node,
+                    None => {}
                     _ => panic!("bug"),
                 }
             }
-        }
-        else if child.is_null() {
+        } else if child.is_null() {
             assert!(self.root.is_null());
             self.root = new_node;
             return None;
-        }
-        else {
+        } else {
             assert!(child == self.root);
             self.root = new_node;
         }
-
 
         if !less_nodes.is_empty() {
             let n_nodes = less_nodes.len();
@@ -308,7 +300,6 @@ impl<K, V> ZipTree<K, V> where
 
                 (*new_node).left = *less_nodes.first().unwrap();
             }
-
         }
 
         if !greater_nodes.is_empty() {
@@ -331,7 +322,8 @@ impl<K, V> ZipTree<K, V> where
         None
     }
 
-    pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V> where
+    pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
+    where
         K: Borrow<Q>,
         Q: Ord,
     {
@@ -370,8 +362,7 @@ impl<K, V> ZipTree<K, V> where
                     let node = less_nodes.back().unwrap();
                     if !(**node).right.is_null() {
                         less_nodes.push_back((**node).right);
-                    }
-                    else {
+                    } else {
                         break;
                     }
                 }
@@ -384,8 +375,7 @@ impl<K, V> ZipTree<K, V> where
                     let node = greater_nodes.back().unwrap();
                     if !(**node).left.is_null() {
                         greater_nodes.push_back((**node).left);
-                    }
-                    else {
+                    } else {
                         break;
                     }
                 }
@@ -400,33 +390,23 @@ impl<K, V> ZipTree<K, V> where
         unsafe {
             loop {
                 let node = match less_nodes.front() {
-                    Some(less) => {
-                        match greater_nodes.front() {
-                            Some(greater) => {
-                                match (**less).rank.cmp(&(**greater).rank) {
-                                    Ordering::Less => greater_nodes.pop_front().unwrap(),
-                                    Ordering::Greater => less_nodes.pop_front().unwrap(),
-                                    Ordering::Equal => match rng.gen_bool(0.5) {
-                                        true => greater_nodes.pop_front().unwrap(),
-                                        false => less_nodes.pop_front().unwrap(),
-                                    }
-                                }
-                            }
-                            None => {
-                                less_nodes.pop_front().unwrap()
-                            }
+                    Some(less) => match greater_nodes.front() {
+                        Some(greater) => match (**less).rank.cmp(&(**greater).rank) {
+                            Ordering::Less => greater_nodes.pop_front().unwrap(),
+                            Ordering::Greater => less_nodes.pop_front().unwrap(),
+                            Ordering::Equal => match rng.gen_bool(0.5) {
+                                true => greater_nodes.pop_front().unwrap(),
+                                false => less_nodes.pop_front().unwrap(),
+                            },
+                        },
+                        None => less_nodes.pop_front().unwrap(),
+                    },
+                    None => match greater_nodes.front() {
+                        Some(_greater) => greater_nodes.pop_front().unwrap(),
+                        None => {
+                            break;
                         }
-                    }
-                    None => {
-                        match greater_nodes.front() {
-                            Some(greater) => {
-                                greater_nodes.pop_front().unwrap()
-                            }
-                            None => {
-                                break;
-                            }
-                        }
-                    }
+                    },
                 };
 
                 if let Some(prev) = child_nodes.back() {
@@ -449,22 +429,18 @@ impl<K, V> ZipTree<K, V> where
                     None => self.root = null_mut(),
                 }
             }
-            Some(Ordering::Less) => {
-                unsafe {
-                    (*parent).left = match child_nodes.front() {
-                        Some(child) => *child,
-                        None => null_mut(),
-                    };
-                }
-            }
-            Some(Ordering::Greater) => {
-                unsafe {
-                    (*parent).right = match child_nodes.front() {
-                        Some(child) => *child,
-                        None => null_mut(),
-                    };
-                }
-            }
+            Some(Ordering::Less) => unsafe {
+                (*parent).left = match child_nodes.front() {
+                    Some(child) => *child,
+                    None => null_mut(),
+                };
+            },
+            Some(Ordering::Greater) => unsafe {
+                (*parent).right = match child_nodes.front() {
+                    Some(child) => *child,
+                    None => null_mut(),
+                };
+            },
             _ => panic!("bug"),
         }
 
@@ -481,7 +457,7 @@ impl<K, V> ZipTree<K, V> where
         path.push_back((self.root, DfsAction::Enter));
 
         Iter {
-            tree: self,
+            _tree: self,
             path,
             dummy: PhantomData,
         }
@@ -492,7 +468,7 @@ impl<K, V> ZipTree<K, V> where
         path.push_back((self.root, DfsAction::Enter));
 
         IterMut {
-            tree: self,
+            _tree: self,
             path,
             dummy: PhantomData,
         }
@@ -503,7 +479,7 @@ impl<K, V> ZipTree<K, V> where
         path.push_back((self.root, DfsAction::Enter));
 
         Keys {
-            tree: self,
+            _tree: self,
             path,
             dummy: PhantomData,
         }
@@ -514,7 +490,7 @@ impl<K, V> ZipTree<K, V> where
         path.push_back((self.root, DfsAction::Enter));
 
         Values {
-            tree: self,
+            _tree: self,
             path,
             dummy: PhantomData,
         }
@@ -525,13 +501,15 @@ impl<K, V> ZipTree<K, V> where
         path.push_back((self.root, DfsAction::Enter));
 
         ValuesMut {
-            tree: self,
+            _tree: self,
             path,
             dummy: PhantomData,
         }
     }
 
-    fn dump(&self) where
+    #[cfg(test)]
+    fn dump(&self)
+    where
         K: Debug,
         V: Debug,
     {
@@ -540,8 +518,7 @@ impl<K, V> ZipTree<K, V> where
 
         if self.root.is_null() {
             return;
-        }
-        else {
+        } else {
             stack.push_back((self.root, 0));
         }
 
@@ -586,8 +563,11 @@ impl<K, V> ZipTree<K, V> where
                             assert!(prev > curr_key);
                         }
 
-                        rank_cnt.entry((*node).rank)
-                            .and_modify(|cnt| { *cnt += 1; })
+                        rank_cnt
+                            .entry((*node).rank)
+                            .and_modify(|cnt| {
+                                *cnt += 1;
+                            })
                             .or_insert(1);
 
                         prev_key_opt = Some(curr_key);
@@ -599,14 +579,14 @@ impl<K, V> ZipTree<K, V> where
 
         let mut ranks = rank_cnt.into_iter().collect::<Vec<_>>();
         ranks.sort_unstable_by_key(|(rank, _)| *rank);
-        ranks.into_iter()
-            .for_each(|(rank, cnt)| {
-                println!("{}\t{}", rank, cnt);
-            });
+        ranks.into_iter().for_each(|(rank, cnt)| {
+            println!("{}\t{}", rank, cnt);
+        });
     }
 }
 
-impl<K, V, Q: ?Sized> Index<&Q> for ZipTree<K, V> where
+impl<K, V, Q: ?Sized> Index<&Q> for ZipTree<K, V>
+where
     K: Borrow<Q> + Ord,
     Q: Ord,
 {
@@ -617,7 +597,8 @@ impl<K, V, Q: ?Sized> Index<&Q> for ZipTree<K, V> where
     }
 }
 
-impl<K, V, Q: ?Sized> IndexMut<&Q> for ZipTree<K, V> where
+impl<K, V, Q: ?Sized> IndexMut<&Q> for ZipTree<K, V>
+where
     K: Borrow<Q> + Ord,
     Q: Ord,
 {
@@ -718,9 +699,7 @@ impl<K, V> Drop for ZipTree<K, V> {
                     path.push_back((left, DfsAction::Enter));
                 }
                 DfsAction::Leave => {
-                    let node_boxed = unsafe {
-                        Box::from_raw(node)
-                    };
+                    let node_boxed = unsafe { Box::from_raw(node) };
                     drop(node_boxed);
                 }
             }
@@ -838,9 +817,7 @@ impl<'a, K, V> Iterator for Keys<'a, K, V> {
                     self.path.push_back((left, DfsAction::Enter));
                 }
                 DfsAction::Leave => {
-                    let key = unsafe {
-                        &(*node).key
-                    };
+                    let key = unsafe { &(*node).key };
 
                     return Some(key);
                 }
@@ -876,9 +853,7 @@ impl<'a, K, V> Iterator for Values<'a, K, V> {
                     self.path.push_back((left, DfsAction::Enter));
                 }
                 DfsAction::Leave => {
-                    let value = unsafe {
-                        &(*node).value
-                    };
+                    let value = unsafe { &(*node).value };
 
                     return Some(value);
                 }
@@ -914,9 +889,7 @@ impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
                     self.path.push_back((left, DfsAction::Enter));
                 }
                 DfsAction::Leave => {
-                    let value = unsafe {
-                        &mut (*node).value
-                    };
+                    let value = unsafe { &mut (*node).value };
 
                     return Some(value);
                 }
@@ -924,7 +897,6 @@ impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
         }
     }
 }
-
 
 impl<K, V> IntoIterator for ZipTree<K, V> {
     type Item = (K, V);
@@ -958,9 +930,7 @@ impl<K, V> IntoIterator for ZipTree<K, V> {
                     path.push_back((left, DfsAction::Enter));
                 }
                 DfsAction::Leave => {
-                    let node_boxed = unsafe {
-                        Box::from_raw(node)
-                    };
+                    let node_boxed = unsafe { Box::from_raw(node) };
                     entries.push_back((node_boxed.key, node_boxed.value));
                 }
             }

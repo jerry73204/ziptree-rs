@@ -2,14 +2,13 @@
 name = "ziptree"
 version = "0.1.1"
 authors = ["jerry73204 <jerry73204@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "Tarjan's zip tree implemented in Rust"
 categories = ["data-structures", "algorithms"]
 documentation = "https://docs.rs/ziptree/0.1.0/ziptree/"
 repository = "https://github.com/jerry73204/ziptree-rs"
 homepage = "https://github.com/jerry73204/ziptree-rs"
 license = "MIT"
-license-file = "LICENSE"
 
 [dependencies]
-rand = "^0.6"
+rand = "0.8.5"
